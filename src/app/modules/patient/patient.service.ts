@@ -155,9 +155,6 @@ const updateIntoDB = async (user: IJWTPayload, payload: any) => {
         })
         return result;
     })
-
-
-
 }
 
 export const PatientService = {
