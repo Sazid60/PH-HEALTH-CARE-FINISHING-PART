@@ -495,7 +495,7 @@ export const PatientService = {
 }
 ```
 
-## 63-6 Overview of Change Password, Refresh Token, Forgot & Reset Password Features
+## 63-6 Overview of Change Password, Refresh Token, Forgot & Reset Password Features, 63-7 Retrieving Information from Cookies
 - emailSender.ts
 
 ```ts 
@@ -892,3 +892,9 @@ export const AuthServices = {
     getMe
 }
 ```
+
+## 63-8 Fetching Prescriptions as a Patient
+
+## 63-9 Retrieving Profile Data
+
+## 63-10 Updating Profile Status & Finalizing the Module
