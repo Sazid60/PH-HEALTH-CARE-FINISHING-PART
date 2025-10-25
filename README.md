@@ -189,3 +189,5 @@ app.use(notFound);
 
 export default app;
 ```
+
+## 64-4 Fetching Dashboard Metadata – Part 1
