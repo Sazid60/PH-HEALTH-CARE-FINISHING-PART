@@ -442,3 +442,187 @@ export const MetaService = {
     fetchDashboardMetaData
 }
 ```
+
+## 64-7 Bonus-1- Understanding the Concept of Fixed Window Rate Limiting, 64-8 Bonus-2- System Design & Practical Implementation of Fixed Window Rate Limiting
+
+![alt text](image-3.png)
+
+- rate limiting means how many request we can accept within a time. 
+- It like we are telling from one Ip we will allow 5 request in one minute.
+- The purpose of rate limiting is when too many requests the server might crash or server will shut down. 
+
+#### Fixed Window Rate Limiting 
+
+![alt text](image-4.png)
+
+
+![alt text](image-5.png)
+
+![alt text](F.png)
+
+- in a separate file of another project 
+- server.ts 
+```ts 
+const http = require('http');
+
+// =======================
+// Rate Limiter Settings
+// =======================
+const rateLimitWindow = 60 * 1000; // Time window: 1 minute
+const maxRequests = 5;             // Maximum allowed requests per IP within the time window
+const ipRequests = {};             // Object to track requests per IP: { ip: { count, startTime } }
+
+/**
+ * -----------------------------
+ * Simple Fixed-Window Rate Limiter
+ * -----------------------------
+ * Logic:
+ * - Each IP address gets a fixed 1-minute window.
+ * - If the IP makes more than `maxRequests` within that window → block it.
+ * - When the window expires, the counter resets.
+ */
+const rateLimitMiddleware = (req, res) => {
+    const ip = req.socket.remoteAddress; // Get client IP address
+    const currentTime = Date.now();      // Current timestamp
+
+    // If IP is seen for the first time, initialize its tracking info
+    if (!ipRequests[ip]) {
+        ipRequests[ip] = {
+            count: 1,
+            startTime: currentTime,
+        };
+    }
+    else {
+        // If still within the same time window
+        if (currentTime - ipRequests[ip].startTime < rateLimitWindow) {
+            ipRequests[ip].count += 1; // Increase the request count
+        }
+        else {
+            // If window has expired → reset counter and start a new window
+            ipRequests[ip] = {
+                count: 1,
+                startTime: currentTime,
+            };
+        }
+    }
+
+    // =======================
+    // Check Rate Limit Status
+    // =======================
+    if (ipRequests[ip].count > maxRequests) {
+        // Too many requests from this IP → block it
+        res.writeHead(429, { 'Content-Type': 'text/plain' }); // 429 = Too Many Requests
+        res.end('Too Many Requests. Please try again later.');
+        return false; // Stop request handling
+    }
+
+    // Request allowed → continue
+    return true;
+};
+
+// =======================
+// HTTP Server Setup
+// =======================
+const server = http.createServer((req, res) => {
+    // Apply rate limiting before handling the request
+    if (!rateLimitMiddleware(req, res)) return;
+
+    // Handle successful requests
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'text/plain');
+    res.end(`Passed \tDate: ${new Date().toISOString()}\n`);
+});
+
+// =======================
+// Start the Server
+// =======================
+server.listen(3000, () => {
+    console.log('🚀 Server running at http://localhost:3000');
+});
+
+```
+
+## 64-9 Bonus-3- Understanding the Concept of Sliding Window Rate Limiting, 64-10 Bonus-4- System Design & Practical Implementation of Sliding Window Rate Limiting
+
+- there is a problem with the fixed windowed rate limiting like when in boundary line there might come some many request then system performance will drop and server might shut down 
+
+![alt text](image-7.png)
+
+- this problem is called `boundary Burst Problem`
+
+- Thi problem is resolved by `sliding rate limiting`
+
+![alt text](image-8.png)
+
+![alt text](image-9.png)
+
+- in another file 
+- server.ts 
+```ts 
+const http = require('http');
+
+// Configuration
+const rateLimitWindowMs = 60 * 1000; // 1 minute window
+const maxRequestsPerWindow = 5;
+const ipRequests = {}; // Store timestamps per IP: { 'ip': [timestamp1, timestamp2, ...] }
+
+/**
+ * Sliding Window Rate Limiter
+ * ----------------------------------
+ * The sliding window algorithm continuously tracks requests within a moving time window.
+ * For each request:
+ *   1. Remove timestamps older than the current window.
+ *   2. Count how many requests remain (still within the window).
+ *   3. If the count >= limit → block the request.
+ *   4. Otherwise, allow it and record the timestamp.
+ */
+const rateLimitMiddleware = (req, res) => {
+    const ip = req.socket.remoteAddress; // Identify user by IP
+    const currentTime = Date.now();
+
+    // Initialize request history for this IP if it doesn't exist
+    if (!ipRequests[ip]) {
+        ipRequests[ip] = [];
+    }
+
+    // Remove timestamps that fall outside the sliding window
+    ipRequests[ip] = ipRequests[ip].filter(timestamp => {
+        return currentTime - timestamp < rateLimitWindowMs;
+    });
+
+    // Calculate the number of requests within the window
+    const requestCount = ipRequests[ip].length; // 0 base count
+
+    // If request count exceeds or equals the allowed limit, reject the request
+    if (requestCount >= maxRequestsPerWindow) {
+        const retryAfter = Math.ceil(
+            (rateLimitWindowMs - (currentTime - ipRequests[ip][0])) / 1000
+        ); // Calculate seconds until user can retry
+
+        res.statusCode = 429; // Too Many Requests
+        res.setHeader('Content-Type', 'text/plain');
+        res.setHeader('Retry-After', retryAfter); // Standard header for rate limits
+        res.end(`Too many requests. Try again in ${retryAfter} seconds.`);
+        return false;
+    }
+
+    // Otherwise, allow the request and record the timestamp
+    ipRequests[ip].push(currentTime);
+    return true;
+};
+
+// Create HTTP server
+const server = http.createServer((req, res) => {
+    if (!rateLimitMiddleware(req, res)) return; // Apply rate limiting before handling request
+
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'text/plain');
+    res.end('Hello, world!');
+});
+
+// Start the server
+server.listen(3000, () => {
+    console.log('Server running at http://localhost:3000');
+});
+
+```
